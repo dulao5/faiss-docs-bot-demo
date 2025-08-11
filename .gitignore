@@ -1,0 +1,3 @@
+faiss_index/**  # FAISS index files
+docs/**  # Documentation files
+.env  # Environment variables file

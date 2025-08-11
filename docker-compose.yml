@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  rag_app:
+    build: .
+    container_name: rag_demo
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./docs:/app/docs
+      - ./faiss_index:/app/faiss_index
