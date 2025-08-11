@@ -4,7 +4,7 @@ import random
 from collections import defaultdict
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
@@ -52,27 +52,27 @@ for chunk in split_docs:
     chunks_by_source[src].append(chunk.page_content)
 
 sampled_parts = []
+all_parts = [] # item is {"page_content": str, "source": str}
 
-# 1) 各ソースからランダムに抽出
-for src, parts in chunks_by_source.items():
-    n = min(len(parts), PER_SOURCE_MAX)
-    sampled = random.sample(parts, n)
-    sampled_parts.extend(sampled)
-    if len(sampled_parts) >= MAX_CHUNKS:
-        break
+for source, parts in chunks_by_source.items():
+    random.shuffle(parts)
+    for part in parts:
+        all_parts.append({"page_content": part, "source": source})
 
-# 2) もしまだ足りない場合、全体からランダムに抽出
-if len(sampled_parts) < MAX_CHUNKS:
-    all_parts = [c.page_content for c in split_docs]
-    # 除外済みの部分を除く
-    remaining = [p for p in all_parts if p not in sampled_parts]
-    need = min(len(remaining), MAX_CHUNKS - len(sampled_parts))
-    if need > 0:
-        sampled_parts.extend(random.sample(remaining, need))
+random.shuffle(all_parts)
 
-# 3) 抽出した部分をランダムに並べ替え、最大文字数に制限
-random.shuffle(sampled_parts)
+# random の効果をDebug
+# source を出力
+sourcelist = [part["source"] for part in all_parts]
+sourcelist = set(sourcelist)
+print(f"抽出されたソース: {sourcelist}")
+
+# from all_parts[:MAX_CHUNKS]
+sampled_parts = [part["page_content"] for part in all_parts[:MAX_CHUNKS]]
+
+textlength = len("\n".join(sampled_parts))
 combined_text = "\n".join(sampled_parts)[:MAX_CHARS]
+print(f"✅ サンプリング完了。抽出されたテキストの長さ: {len(combined_text)} 文字 , limited by {textlength} 文字")
 
 # ----------------- FAQ サンプル生成 -----------------
 print("💡 LLM で サンプル FAQ を生成")
