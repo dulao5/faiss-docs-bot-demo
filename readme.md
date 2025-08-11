@@ -1,4 +1,4 @@
-本プロジェクトはファイルシステムで簡単に動く RAG Demoです。
+ローカルで簡単に動く RAG (Retrieval-Augmented Generation) Bot の Demo です。
 
 # 0. ナレッジファイルを用意する
 `docs/` に Markdown ファイル (`*.md`)を置く
