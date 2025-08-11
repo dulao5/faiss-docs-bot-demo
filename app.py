@@ -1,8 +1,8 @@
 import os
 import streamlit as st
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain.chains import RetrievalQA
+#from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
@@ -48,6 +48,7 @@ retriever, llm, prompt = load_qa()
 
 st.set_page_config(page_title="ナレッジベースボット Demo", layout="wide")
 st.title("📚 ナレッジベースボット Demo")
+st.markdown("__自然言語で質問し、ドキュメントから回答を得る__")
 
 faq_file = "docs/__faq_suggestions.txt"
 if os.path.exists(faq_file):
@@ -80,13 +81,20 @@ with st.form("query_form", clear_on_submit=False):
     submitted = st.form_submit_button("Post")
     if submitted and query.strip():
         with st.spinner("回答を生成中..."):
-            docs = retriever.get_relevant_documents(query)
+            docs = retriever.invoke(query)
             context = build_context_with_sources(docs)
             answer_msg = llm.invoke(prompt.format(context=context, query=query))
             answer = answer_msg.content.strip()
+            debug_info = f"質問: {query}\n\n参考情報:\n{context}\n\n回答: {answer}"
+
+
             if answer == "いいえ":
                 st.markdown("**関連する結果はありません**")
             else:
                 st.markdown(f"**回答：** {answer}")
+            
+            # デバッグ情報を表示
+            #st.markdown("### デバッグ情報")
+            #st.code(debug_info, language="markdown")
 
             
