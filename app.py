@@ -72,7 +72,7 @@ with st.form("query_form", clear_on_submit=False):
             relevance_msg = llm.invoke(prompt)
             relevance = relevance_msg.content.strip()
             if relevance == "いいえ":
-                st.markdown("**関係性ある結果がありません**")
+                st.markdown("**関連する結果はありません**")
             else:
                 # 继续用 RetrievalQA 生成最终答案
                 answer = RetrievalQA.from_chain_type(llm, retriever=retriever).run(query)
