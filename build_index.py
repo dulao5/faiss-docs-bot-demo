@@ -38,6 +38,11 @@ print("✂️ Chunkで分割...")
 splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 split_docs = splitter.split_documents(docs)
 
+# split_docs の chunk の page_content に 出典情報を追加
+for chunk in split_docs:
+    src = chunk.metadata.get("source") or chunk.metadata.get("file_path") or "unknown"
+    chunk.page_content = f"[出典: {src}]\n{chunk.page_content}"
+
 print(f"🛠 ベクタードキュメント（{len(split_docs)} chunks）...")
 embeddings = OpenAIEmbeddings()
 db = FAISS.from_documents(split_docs, embeddings)

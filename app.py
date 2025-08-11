@@ -94,7 +94,14 @@ with st.form("query_form", clear_on_submit=False):
                 st.markdown(f"**回答：** {answer}")
             
             # デバッグ情報を表示
-            #st.markdown("### デバッグ情報")
-            #st.code(debug_info, language="markdown")
+            st.markdown(f"""
+            <details>
+                <summary>※ Debug Info </summary>
+                <code>
+                {debug_info}
+                </code>
+            </details>
+            """, unsafe_allow_html=True)
+
 
             
