@@ -19,11 +19,32 @@ def load_qa():
     db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     retriever = db.as_retriever(search_kwargs={"k": 3})
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    return retriever, llm
+    
+    # 自定义 Prompt
+    template = """
+        以下はユーザーの質問と、知識ベースから抽出した複数の参考情報です。
+        この中に質問と関係性がある回答が全くなければ「いいえ」とだけ答えてください。
+        関係性があれば、質問に答える際は、必ず"（出典:参考情報ファイル名）"を使って根拠を明示してください。
+        質問: {query}\n"
+        参考情報:\n{context}\n"
+    """
+    promptTempl = PromptTemplate(
+        input_variables=["context", "query"],
+        template=template
+    )
+
+    return retriever, llm, promptTempl
+
+def build_context_with_sources(docs):
+    """把文档和来源组合成上下文"""
+    context_parts = []
+    for d in docs:
+        source = d.metadata.get("source", "未知")
+        context_parts.append(f"{d.page_content}\n(出典:{source})")
+    return "\n\n".join(context_parts)
 
 
-
-retriever, llm = load_qa()
+retriever, llm, prompt = load_qa()
 
 st.set_page_config(page_title="ナレッジベースボット Demo", layout="wide")
 st.title("📚 ナレッジベースボット Demo")
@@ -60,20 +81,12 @@ with st.form("query_form", clear_on_submit=False):
     if submitted and query.strip():
         with st.spinner("回答を生成中..."):
             docs = retriever.get_relevant_documents(query)
-            # 构造相关性判断 prompt
-            context = "\n\n".join([doc.page_content for doc in docs])
-            relevance_prompt = (
-                "以下はユーザーの質問と、知識ベースから抽出した3つの回答候補です。\n"
-                "質問: {query}\n"
-                "回答候補:\n{context}\n"
-                "この中に質問と関係性がある回答が1つでもあれば「はい」、全くなければ「いいえ」とだけ答えてください。"
-            )
-            prompt = relevance_prompt.format(query=query, context=context)
-            relevance_msg = llm.invoke(prompt)
-            relevance = relevance_msg.content.strip()
-            if relevance == "いいえ":
+            context = build_context_with_sources(docs)
+            answer_msg = llm.invoke(prompt.format(context=context, query=query))
+            answer = answer_msg.content.strip()
+            if answer == "いいえ":
                 st.markdown("**関連する結果はありません**")
             else:
-                # 继续用 RetrievalQA 生成最终答案
-                answer = RetrievalQA.from_chain_type(llm, retriever=retriever).run(query)
                 st.markdown(f"**回答：** {answer}")
+
+            
