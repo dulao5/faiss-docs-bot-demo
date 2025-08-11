@@ -1,3 +1,4 @@
-faiss_index/**  # FAISS index files
-docs/**  # Documentation files
+faiss_index/*.faiss
+faiss_index/*.pkl
+docs/__*.txt
 .env  # Environment variables file
