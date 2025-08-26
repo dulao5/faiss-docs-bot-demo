@@ -1,17 +1,45 @@
 import os
 import streamlit as st
 from langchain_community.vectorstores import FAISS
-#from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_openai import OpenAIEmbeddings
-from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.prompts import PromptTemplate
+from build_index import watch_and_rebuild
+import threading
 
+# Check for OpenAI API key
 api_key = os.environ.get("OPENAI_API_KEY")
 if not api_key:
     st.error("Please she the system variable OPENAI_API_KEY")
     st.stop()
 
+# Global observer variable
+if 'observer' not in st.session_state:
+    st.session_state.observer = None
 
+# Initialize file watcher when the script starts
+def init_watcher():
+    if st.session_state.observer is None:
+        st.session_state.observer = watch_and_rebuild(
+            docs_dir="docs",
+            faiss_index_path="faiss_index",
+            cooldown=5.0
+        )
+        print("👀 Started watching for document changes...")
+
+# Initialize watcher in a background thread
+if st.session_state.observer is None:
+    watch_thread = threading.Thread(target=init_watcher, daemon=True)
+    watch_thread.start()
+
+# Cleanup handler using st.runtime.scriptrunner
+def cleanup():
+    if st.session_state.observer:
+        st.session_state.observer.stop()
+        st.session_state.observer.join()
+        print("\n👋 Stopped watching for changes")
+
+# Register cleanup handler
+st.runtime.scriptrunner.add_script_run_ctx().on_script_stop(cleanup)
 
 @st.cache_resource
 def load_qa():
@@ -104,4 +132,3 @@ with st.form("query_form", clear_on_submit=False):
             """, unsafe_allow_html=True)
 
 
-            
