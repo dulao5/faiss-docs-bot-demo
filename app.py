@@ -3,8 +3,9 @@ import streamlit as st
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.prompts import PromptTemplate
-from build_index import watch_and_rebuild
+from build_index import watch_and_rebuild, build_faiss_index, build_faq_samples
 import threading
+import time
 
 # Check for OpenAI API key
 api_key = os.environ.get("OPENAI_API_KEY")
@@ -12,37 +13,69 @@ if not api_key:
     st.error("Please she the system variable OPENAI_API_KEY")
     st.stop()
 
-# Global observer variable
+# Initialize session state
 if 'observer' not in st.session_state:
     st.session_state.observer = None
 
-# Initialize file watcher when the script starts
-def init_watcher():
-    if st.session_state.observer is None:
-        st.session_state.observer = watch_and_rebuild(
+if 'last_rebuild_time' not in st.session_state:
+    st.session_state.last_rebuild_time = time.time()
+
+def rebuild_all():
+    """Rebuild all resources: FAISS index, FAQ suggestions, and reload cache"""
+    print("\n🔄 Rebuilding all resources...")
+    try:
+        # 1. Build FAISS index
+        db = build_faiss_index(
+            docs_dir="docs",
+            save_path="faiss_index"
+        )
+        
+        # 2. Build FAQ suggestions
+        build_faq_samples(
+            split_docs=db.docstore._dict.values(),
+            faq_path="docs/__faq_suggestions.txt"
+        )
+        
+        # 3. Update timestamp and clear cache
+        st.session_state.last_rebuild_time = time.time()
+        st.cache_resource.clear()
+        print("✅ All resources rebuilt and cache cleared")
+    except Exception as e:
+        print(f"❌ Error during rebuild: {e}")
+
+# Start file watcher
+if st.session_state.observer is None:
+    try:
+        observer = watch_and_rebuild(
             docs_dir="docs",
             faiss_index_path="faiss_index",
             cooldown=5.0
         )
+        st.session_state.observer = observer
         print("👀 Started watching for document changes...")
+    except Exception as e:
+        print(f"❌ Error starting watcher: {e}")
 
-# Initialize watcher in a background thread
-if st.session_state.observer is None:
-    watch_thread = threading.Thread(target=init_watcher, daemon=True)
-    watch_thread.start()
+# Register cleanup using atexit
+import atexit
 
-# Cleanup handler using st.runtime.scriptrunner
 def cleanup():
-    if st.session_state.observer:
-        st.session_state.observer.stop()
-        st.session_state.observer.join()
-        print("\n👋 Stopped watching for changes")
+    if hasattr(st.session_state, 'observer') and st.session_state.observer:
+        try:
+            st.session_state.observer.stop()
+            st.session_state.observer.join()
+            print("\n👋 Stopped watching for changes")
+        except Exception as e:
+            print(f"❌ Error during cleanup: {e}")
 
-# Register cleanup handler
-st.runtime.scriptrunner.add_script_run_ctx().on_script_stop(cleanup)
+atexit.register(cleanup)
 
 @st.cache_resource
 def load_qa():
+    # Add timestamp dependency to force reload when rebuilt
+    _ = st.session_state.last_rebuild_time
+    
+    print("📚 Loading QA resources...")
     embeddings = OpenAIEmbeddings()
     db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     retriever = db.as_retriever(search_kwargs={"k": 3})
