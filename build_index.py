@@ -10,6 +10,10 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
+from watchdog.observers import Observer
+from doc_change_handler import DocChangeHandler
+import time
+import asyncio
 
 def build_faiss_index(
     docs_dir: str = "docs",
@@ -115,6 +119,45 @@ def build_faq_samples(
 
     print(f"✅ FAQ サンプルを {faq_path} に保存しました。")
 
+def watch_and_rebuild(
+    docs_dir: str = "docs",
+    faiss_index_path: str = "faiss_index",
+    cooldown: float = 5.0
+) -> Observer:
+    """
+    Watch docs directory for changes and rebuild index when changes occur.
+    
+    Args:
+        docs_dir: Directory to watch for markdown files
+        faiss_index_path: Path to save FAISS index
+        cooldown: Seconds to wait after last change before rebuilding
+    
+    Returns:
+        Observer object that can be used to stop watching (observer.stop())
+    """
+    def rebuild():
+        try:
+            print("\n🔄 Documents changed, rebuilding indexes...")
+            db = build_faiss_index(
+                docs_dir=docs_dir,
+                save_path=faiss_index_path
+            )
+            build_faq_samples(
+                split_docs=db.docstore._dict.values(),
+                faq_path=os.path.join(docs_dir, "__faq_suggestions.txt")
+            )
+        except Exception as e:
+            print(f"❌ Error during rebuild: {e}")
+
+    observer = Observer()
+    handler = DocChangeHandler(rebuild, cooldown)
+    observer.schedule(handler, docs_dir, recursive=True)
+    observer.start()
+    print(f"👀 Watching {docs_dir} for changes...")
+    
+    return observer
+
+# Update main block to include watching functionality
 if __name__ == "__main__":
     # Check for OpenAI API key
     if not os.environ.get("OPENAI_API_KEY"):
@@ -135,3 +178,15 @@ if __name__ == "__main__":
         split_docs=db.docstore._dict.values(),
         faq_path=faq_path
     )
+
+    try:
+        # Start watching for changes
+        observer = watch_and_rebuild()
+        
+        # Keep the main thread alive
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+        observer.join()
+        print("\n👋 Stopped watching for changes")
